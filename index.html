@@ -23,10 +23,10 @@
         }
         h1 {
             margin: 0;
-            font-size: 48px;  /* Increased by 100% */
+            font-size: 48px;
         }
         .subheader {
-            font-size: 36px;  /* Increased by 100% */
+            font-size: 36px;
             margin-top: 10px;
         }
         #pdf-container {
@@ -35,29 +35,46 @@
             flex-direction: column;
             align-items: center;
             margin: 20px 0;
+            position: relative;
         }
         #pdf-viewer {
             width: 100%;
             height: 80vh;
-            overflow: auto;
             display: flex;
             justify-content: center;
+            align-items: center;
         }
-        #pdf-controls {
-            margin-top: 10px;
+        .pdf-page {
+            margin: 0 10px;
         }
-        button {
+        .nav-arrow {
+            position: absolute;
+            bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.5);
+            color: black;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+        }
+        #prev-arrow {
+            left: 20px;
+        }
+        #next-arrow {
+            right: 20px;
+        }
+        footer {
+            text-align: center;
+            padding: 20px;
+        }
+        .contact-button {
             background-color: white;
             color: black;
             border: none;
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
-            margin: 0 5px;
-        }
-        footer {
-            text-align: center;
-            padding: 20px;
         }
     </style>
 </head>
@@ -72,15 +89,12 @@
 
     <div id="pdf-container">
         <div id="pdf-viewer"></div>
-        <div id="pdf-controls">
-            <button id="prev">Previous</button>
-            <button id="next">Next</button>
-            <span>Page: <span id="page-num"></span> / <span id="page-count"></span></span>
-        </div>
+        <button id="prev-arrow" class="nav-arrow">&lt;</button>
+        <button id="next-arrow" class="nav-arrow">&gt;</button>
     </div>
 
     <footer>
-        <button onclick="window.location.href='YOUR_CONTACT_FORM_URL'">Contact Us</button>
+        <button class="contact-button" onclick="window.location.href='https://airtable.com/appgcOb9Qzb6pWisX/shrKeYjEoaZVtL6bG'">Contact Us</button>
     </footer>
 
     <script>
@@ -88,74 +102,73 @@
 
         const url = 'https://raw.githubusercontent.com/blueprints/main/2024_09_06_10YearLookback_Draft_Phase12_v4.pdf';
         let pdfDoc = null,
-            pageNum = 1,
-            pageRendering = false,
-            pageNumPending = null,
+            currentPage = 1,
             scale = 1.5;
 
-        function renderPage(num) {
-            pageRendering = true;
-            pdfDoc.getPage(num).then(function(page) {
-                const viewport = page.getViewport({scale: scale});
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
+        function renderPages(leftPage, rightPage) {
+            const viewer = document.getElementById('pdf-viewer');
+            viewer.innerHTML = '';
 
-                const renderContext = {
-                    canvasContext: ctx,
-                    viewport: viewport
-                };
-                const renderTask = page.render(renderContext);
+            const renderPage = (pageNum) => {
+                return pdfDoc.getPage(pageNum).then(function(page) {
+                    const viewport = page.getViewport({scale: scale});
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
 
-                renderTask.promise.then(function() {
-                    pageRendering = false;
-                    if (pageNumPending !== null) {
-                        renderPage(pageNumPending);
-                        pageNumPending = null;
-                    }
+                    const renderContext = {
+                        canvasContext: ctx,
+                        viewport: viewport
+                    };
+                    return page.render(renderContext).promise.then(() => canvas);
                 });
+            };
 
-                const viewer = document.getElementById('pdf-viewer');
-                viewer.innerHTML = '';
-                viewer.appendChild(canvas);
-
-                document.getElementById('page-num').textContent = num;
+            Promise.all([
+                leftPage ? renderPage(leftPage) : Promise.resolve(null),
+                renderPage(rightPage)
+            ]).then(([leftCanvas, rightCanvas]) => {
+                if (leftCanvas) {
+                    leftCanvas.className = 'pdf-page';
+                    viewer.appendChild(leftCanvas);
+                }
+                rightCanvas.className = 'pdf-page';
+                viewer.appendChild(rightCanvas);
             });
         }
 
-        function queueRenderPage(num) {
-            if (pageRendering) {
-                pageNumPending = num;
+        function showPages() {
+            if (currentPage === 1 || currentPage === pdfDoc.numPages) {
+                renderPages(null, currentPage);
             } else {
-                renderPage(num);
+                renderPages(currentPage % 2 === 0 ? currentPage : currentPage - 1, 
+                            currentPage % 2 === 0 ? currentPage + 1 : currentPage);
             }
         }
 
         function onPrevPage() {
-            if (pageNum <= 1) {
-                return;
-            }
-            pageNum--;
-            queueRenderPage(pageNum);
+            if (currentPage <= 1) return;
+            currentPage = Math.max(1, currentPage - 2);
+            showPages();
         }
 
         function onNextPage() {
-            if (pageNum >= pdfDoc.numPages) {
-                return;
-            }
-            pageNum++;
-            queueRenderPage(pageNum);
+            if (currentPage >= pdfDoc.numPages) return;
+            currentPage = Math.min(pdfDoc.numPages, currentPage + 2);
+            showPages();
         }
 
-        pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
-            pdfDoc = pdfDoc_;
-            document.getElementById('page-count').textContent = pdfDoc.numPages;
-            renderPage(pageNum);
+        pdfjsLib.getDocument(url).promise.then(function(pdf) {
+            pdfDoc = pdf;
+            showPages();
+        }).catch(function(error) {
+            console.error('Error loading PDF:', error);
+            document.getElementById('pdf-viewer').textContent = 'Error loading PDF. Please try again later.';
         });
 
-        document.getElementById('prev').addEventListener('click', onPrevPage);
-        document.getElementById('next').addEventListener('click', onNextPage);
+        document.getElementById('prev-arrow').addEventListener('click', onPrevPage);
+        document.getElementById('next-arrow').addEventListener('click', onNextPage);
     </script>
 </body>
 </html>
