@@ -19,7 +19,7 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
         
-        const url = 'path/to/your/pdf.pdf';
+        const url = 'https://raw.githubusercontent.com/mini-mato/blueprints/main/2024_09_06_10YearLookback_Draft_Phase12_v4.pdf';
         
         pdfjsLib.getDocument(url).promise.then(function(pdf) {
             pdf.getPage(1).then(function(page) {
